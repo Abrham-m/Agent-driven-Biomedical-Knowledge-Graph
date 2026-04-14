@@ -1,0 +1,15 @@
+# Third-party only (built-in modules like json, os, re, etc. are automatically included)
+nltk
+tqdm
+rapidfuzz
+fitz
+transformers
+torch
+neo4j
+python-dotenv
+langchain-core
+langchain-openai
+langchain-ollama
+tiktoken
+requests
+# Note: Some dependencies may require specific versions for compatibility. Adjust as needed.

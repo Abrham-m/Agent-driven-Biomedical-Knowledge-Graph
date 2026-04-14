@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Local settings and editor files
+.vscode/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Generated project outputs
+output/
+
+# Dataset downloads and intermediate files
+dataset/research_papers/
+dataset/cleaned_papers/
+
+# Generated ontology index
+ncit_indexes.pkl
+
+# Logs and temporary files
+*.log
+*.tmp
+*.cache
