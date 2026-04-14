@@ -267,7 +267,3 @@ ollama pull llama3.2:3b
 Run `python ontology_download.py` then `python ontology_inspector.py`, or extract from `lib/ncit_indexes.pkl.zip`.
 
 ---
-
-## License
-
-MIT License — feel free to use, modify, and build on this project.
