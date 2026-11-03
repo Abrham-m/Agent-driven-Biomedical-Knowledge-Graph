@@ -25,7 +25,27 @@ class Neo4jGraph:
             result = session.run(query, params or {})
             return [record.data() for record in result]
 
-def add_to_neo4j(paper_name: str, relationships_path: Path):
+def _connect():
+    return Neo4jGraph(os.getenv("NEO4J_URI"), os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
+
+
+def clear_graph():
+    """Delete ALL nodes and relationships. Only called when explicitly requested (--clear-neo4j)."""
+    g = _connect()
+    g.run_query("MATCH (n) DETACH DELETE n")
+    g.close()
+    print("🗑  Neo4j database cleared")
+
+
+def graph_counts():
+    g = _connect()
+    nodes = g.run_query("MATCH (n) RETURN count(n) AS c")[0]["c"]
+    rels = g.run_query("MATCH ()-[r]->() RETURN count(r) AS c")[0]["c"]
+    g.close()
+    return {"nodes": nodes, "relationships": rels}
+
+
+def add_to_neo4j(paper_name: str, relationships_path: Path, run_id: Optional[str] = None):
     if not relationships_path.exists():
         print(f"❌ {relationships_path} not found. Skipping.")
         return
@@ -39,6 +59,11 @@ def add_to_neo4j(paper_name: str, relationships_path: Path):
             rel["source_ids"] = []
         if "target_ids" not in rel:
             rel["target_ids"] = []
+        # Provenance (flattened: Neo4j properties can't hold maps)
+        prov = rel.get("provenance") or {}
+        rel["chunk_id"] = prov.get("chunk_id")
+        rel["evidence"] = [f"[{paper_name}] {s}" for s in prov.get("evidence_sentences", [])]
+        rel["extraction_model"] = prov.get("model_used")
 
     # Only store relationships with both source and target grounded in the ontology
     relationships = [rel for rel in relationships if rel.get("valid_entities")]
@@ -87,13 +112,21 @@ def add_to_neo4j(paper_name: str, relationships_path: Path):
             THEN coalesce(r.source_paper, '') + 
                  CASE WHEN r.source_paper IS NULL THEN '' ELSE ',' END + 
                  $paper_name 
-            ELSE r.source_paper 
+            ELSE r.source_paper
         END
+    SET r.run_id = coalesce($run_id, r.run_id),
+        r.extraction_model = coalesce(rel.extraction_model, r.extraction_model),
+        r.chunk_ids = CASE
+            WHEN rel.chunk_id IS NULL OR rel.chunk_id IN coalesce(r.chunk_ids, []) THEN r.chunk_ids
+            ELSE coalesce(r.chunk_ids, []) + rel.chunk_id
+        END,
+        r.evidence = coalesce(r.evidence, []) + [s IN rel.evidence WHERE NOT s IN coalesce(r.evidence, [])]
     """
 
     neo4j_graph.run_query(query, {
         "rels": relationships,
-        "paper_name": paper_name
+        "paper_name": paper_name,
+        "run_id": run_id
     })
 
     result = neo4j_graph.run_query("""

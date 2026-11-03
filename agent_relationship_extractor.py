@@ -21,6 +21,24 @@ import tiktoken
 
 load_dotenv()
 
+# === Extraction model settings (recorded in runs/<run_id>/config.json) ===
+EXTRACTION_TEMPERATURE = 0.0
+GEMINI_MAX_OUTPUT_TOKENS = 65536  # gemini-2.5-flash max; 8192 truncated every paper (thinking tokens share this budget)
+GEMINI_MAX_RETRIES = 6
+GEMINI_MAX_WAIT_S = 120
+OPENAI_MODEL = "gpt-4o"
+OLLAMA_MODEL = "deepseek-coder:6.7b"
+
+# Provenance of the most recent extract_relationships() call (logging only; never contains secrets)
+LAST_CALL_INFO = {}
+
+
+def configured_model_name(backend):
+    if backend == "gemini":
+        return os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    return OPENAI_MODEL if backend == "openai" else OLLAMA_MODEL
+
+
 relationship_extraction_prompt = PromptTemplate.from_template("""
 Analyze this biomedical text and extract precise relationships between entities with scientific rigor.
 The text may contain technical terminology and entity names with minor variations — use contextual understanding to match them.
@@ -155,7 +173,29 @@ def trim_to_token_limit(text, max_tokens=22000, model_name="gpt-4o"):
     return enc.decode(tokens)
 
 
+def _redact(msg, secret):
+    """Never let an API key leak into logs/errors."""
+    msg = str(msg)
+    return msg.replace(secret, "***") if secret else msg
+
+
+def _retry_wait(response, attempt):
+    """Seconds to wait after a 429/5xx: honour Gemini's RetryInfo when present, else back off."""
+    try:
+        err = response.json().get("error", {})
+        for d in err.get("details", []):
+            if "retryDelay" in d:
+                return min(float(str(d["retryDelay"]).rstrip("s")) + 1, GEMINI_MAX_WAIT_S)
+        m = re.search(r"retry in (\d+(?:\.\d+)?)s", err.get("message", ""))
+        if m:
+            return min(float(m.group(1)) + 1, GEMINI_MAX_WAIT_S)
+    except Exception:
+        pass
+    return min(15 * 2 ** attempt, GEMINI_MAX_WAIT_S)
+
+
 def gemini_generate(prompt, model=None, api_key=None):
+    import time
     api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not set in environment")
@@ -164,41 +204,75 @@ def gemini_generate(prompt, model=None, api_key=None):
     # Build deduplicated fallback list
     fallback_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
     try_models = [configured_model] + [m for m in fallback_models if m != configured_model]
+    LAST_CALL_INFO["model_requested"] = configured_model
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0.0,
-            "maxOutputTokens": 8192
+            "temperature": EXTRACTION_TEMPERATURE,
+            "maxOutputTokens": GEMINI_MAX_OUTPUT_TOKENS
         }
     }
 
-    headers = {"Content-Type": "application/json"}
+    # API key goes in a header (not the URL) so it can never appear in exception messages
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
 
     error_list = []
     for m in try_models:
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
         print(f"🤖 Trying Gemini model: {m}")
-        try:
-            response = requests.post(endpoint, json=payload, headers=headers, timeout=60)
-            if not response.ok:
-                err_msg = response.json().get("error", {}).get("message", response.text)
-                raise ValueError(f"HTTP {response.status_code}: {err_msg}")
-            response_data = response.json()
-            candidates = response_data.get("candidates", [])
-            if not candidates:
-                raise ValueError("No candidate output returned from Gemini API")
-            print(f"✅ Gemini responded using model: {m}")
-            return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        except Exception as e:
-            print(f"⚠️ Model {m} failed: {type(e).__name__}: {e}")
-            error_list.append((m, type(e).__name__, str(e)))
-            continue
+        for attempt in range(GEMINI_MAX_RETRIES):
+            try:
+                response = requests.post(endpoint, json=payload, headers=headers, timeout=300)
+                if response.status_code in (429, 500, 503, 504):
+                    wait = _retry_wait(response, attempt)
+                    print(f"⏳ HTTP {response.status_code} on {m}, waiting {wait:.0f}s "
+                          f"(attempt {attempt + 1}/{GEMINI_MAX_RETRIES})...")
+                    try:
+                        print(f"   ↳ {_redact(response.json().get('error', {}).get('message', ''), api_key)[:500]}")
+                    except Exception:
+                        pass
+                    LAST_CALL_INFO["retries"] = LAST_CALL_INFO.get("retries", 0) + 1
+                    time.sleep(wait)
+                    continue
+                if not response.ok:
+                    err_msg = response.json().get("error", {}).get("message", response.text)
+                    raise ValueError(f"HTTP {response.status_code}: {err_msg}")
+                response_data = response.json()
+                candidates = response_data.get("candidates", [])
+                if not candidates:
+                    raise ValueError("No candidate output returned from Gemini API")
+                print(f"✅ Gemini responded using model: {m}")
+                LAST_CALL_INFO["model_used"] = m
+                LAST_CALL_INFO["finish_reason"] = candidates[0].get("finishReason")
+                usage = response_data.get("usageMetadata", {})
+                LAST_CALL_INFO["usage"] = {k: usage.get(k) for k in
+                                           ("promptTokenCount", "candidatesTokenCount", "thoughtsTokenCount")}
+                return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            except requests.RequestException as e:  # network/timeout: transient, retry
+                wait = min(15 * 2 ** attempt, GEMINI_MAX_WAIT_S)
+                print(f"⚠️ Model {m} network error ({type(e).__name__}), waiting {wait}s "
+                      f"(attempt {attempt + 1}/{GEMINI_MAX_RETRIES})...")
+                LAST_CALL_INFO["retries"] = LAST_CALL_INFO.get("retries", 0) + 1
+                time.sleep(wait)
+            except Exception as e:
+                msg = _redact(e, api_key)
+                print(f"⚠️ Model {m} failed: {type(e).__name__}: {msg}")
+                error_list.append((m, type(e).__name__, msg))
+                break  # non-retryable: move to next model
+        else:
+            print(f"❌ Model {m} exhausted {GEMINI_MAX_RETRIES} retries, trying next model...")
+            error_list.append((m, "RetriesExhausted", f"{GEMINI_MAX_RETRIES} retryable failures"))
 
     raise RuntimeError(f"Gemini generate failed for all model candidates: {error_list}")
 
 
 def extract_relationships(text, entities, core_entity, backend="ollama"):
+    LAST_CALL_INFO.clear()
+    LAST_CALL_INFO.update(backend=backend, model_requested=configured_model_name(backend),
+                          temperature=EXTRACTION_TEMPERATURE)
+    if backend != "gemini":
+        LAST_CALL_INFO["model_used"] = configured_model_name(backend)
     try:
         # Dynamically choose backend
         if backend == "gemini":
@@ -216,10 +290,11 @@ def extract_relationships(text, entities, core_entity, backend="ollama"):
             if backend == "openai":
 
                 from langchain_openai import ChatOpenAI
-                llm = ChatOpenAI(model="gpt-4o", temperature=0)
+                llm = ChatOpenAI(model=OPENAI_MODEL, temperature=EXTRACTION_TEMPERATURE)
             else:
                 from langchain_ollama import OllamaLLM
-                llm = OllamaLLM(model="deepseek-coder:6.7b", stop=["<Think>", "</Think>", "<|im_end|>"])
+                llm = OllamaLLM(model=OLLAMA_MODEL, temperature=EXTRACTION_TEMPERATURE,
+                                stop=["<Think>", "</Think>", "<|im_end|>"])
 
             chain = relationship_extraction_prompt | llm
 
@@ -319,6 +394,7 @@ def extract_relationships(text, entities, core_entity, backend="ollama"):
         return valid_relationships
 
     except Exception as e:
+        LAST_CALL_INFO["error"] = f"{type(e).__name__}: {e}"
         print(f"❌ Error in relationship extraction: {str(e)}")
         if 'response_content' in locals():
             print(f"Raw response was: {response_content[:1000]}")
