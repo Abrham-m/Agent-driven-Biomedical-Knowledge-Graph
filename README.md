@@ -104,7 +104,7 @@ PDF Papers
 
 ## Results
 
-Evaluation graph built on 2026-11-03 with `gemini-2.5-flash` (temperature 0, `maxOutputTokens` 65536), core entity `breast cancer`, NER model `d4data/biomedical-ner-all`. It was produced by two runs: `20261103-020351` covers 7 papers, and `20261103-111604` re-ran the 2 papers that hit Gemini rate limits (`--papers`). Full logs are in `runs/<run_id>/`.
+Evaluation graph built on 2026-11-03 with `gemini-2.5-flash` (temperature 0, `maxOutputTokens` 65536), core entity `breast cancer`, NER model `d4data/biomedical-ner-all`, stored in a local Neo4j 5.26 Community instance. It was produced by two runs: `20261103-020351` covers 7 papers, and `20261103-111604` re-ran the 2 papers that hit Gemini rate limits (`--papers`). Full logs are in `runs/<run_id>/`.
 
 | Metric | Value |
 |---|---|
@@ -134,6 +134,31 @@ Per paper:
 The most-connected nodes are trastuzumab deruxtecan (21 edges), sacituzumab govitecan (16), ladiratumab vedotin (13), immunotherapy (13) and immune-related adverse events (13).
 
 Each run directory contains `config.json` (settings, papers, model actually used, finish reason and token usage per paper), `relations.jsonl` (one line per extracted relation with its provenance and validation outcome), `entity_validation.jsonl` (one line per NCIt candidate) and `summary.json`. Every Neo4j relationship carries `source_paper`, `run_id`, `chunk_ids`, `evidence` and `extraction_model`.
+
+### Knowledge graph in Neo4j
+
+Screenshots from Neo4j Browser of the evaluation graph described above.
+
+**Full graph:** 196 `Entity` nodes and 209 `RELATED_TO` relationships. The sidebar lists the provenance property keys stored on the graph (`chunk_ids`, `evidence`, `extraction_model`, `run_id`, `source_paper`).
+
+![Full evaluation graph in Neo4j Browser: 196 nodes, 209 relationships](docs/images/graph_overview.png)
+
+**Close-up:** trastuzumab deruxtecan, the most-connected node, linked to the adverse events and comparator drugs reported in the ADC paper.
+
+![Close-up of the graph around trastuzumab deruxtecan](docs/images/graph_trastuzumab_deruxtecan.png)
+
+**Relations as a table:** extracted source → target pairs, e.g. probiotics → immune-related adverse events and immunotherapy → glioma.
+
+![Table view of extracted relations](docs/images/graph_provenance_table.png)
+
+**Counts check:** 196 nodes and 209 relationships, all produced by the two evaluation runs (`20261103-020351`, `20261103-111604`).
+
+![Node and relationship counts with run IDs](docs/images/graph_counts.png)
+
+**Video walkthrough** (3:47) of browsing the graph in Neo4j Browser:
+
+<!-- Paste the GitHub user-attachments video link on its own line below (upload docs/media/neo4j_graph_walkthrough_github.mp4 via the GitHub web editor) -->
+
 
 ---
 
@@ -173,7 +198,7 @@ To reproduce the run: `python main_pipeline.py --mode full --backend gemini --co
 |---|---|
 | NER model | BioBERT |
 | LLM backends | GPT-4o, Gemini 2.5 Flash, LLaMA (Ollama) |
-| Graph database | Neo4j Aura |
+| Graph database | Neo4j (Aura or local; the evaluation graph uses local Neo4j 5.26 Community) |
 | Ontology | NCIt — NCI Thesaurus (OWL) |
 | Language | Python 3.10+ |
 | Local inference | Ollama |
