@@ -157,7 +157,13 @@ Screenshots from Neo4j Browser of the evaluation graph described above.
 
 **Video walkthrough** (3:47) of browsing the graph in Neo4j Browser:
 
-<!-- Paste the GitHub user-attachments video link on its own line below (upload docs/media/neo4j_graph_walkthrough_github.mp4 via the GitHub web editor) -->
+
+
+
+https://github.com/user-attachments/assets/c936441c-0404-4f2c-8dec-6eb311de7670
+
+
+
 
 
 ---
