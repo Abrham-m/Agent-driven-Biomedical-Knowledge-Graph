@@ -1,0 +1,21 @@
+{
+  "run_id": "20261102-205306",
+  "status": "completed",
+  "run_time_s": 573.3,
+  "stats": {
+    "relations_extracted": 75,
+    "relations_valid_entities": 10,
+    "relations_with_evidence_sentence": 46,
+    "candidate_entities": 105,
+    "accepted_entities": 36,
+    "rejected_entities": 69,
+    "papers_processed": 9,
+    "ner_raw_entities": 11162,
+    "ner_final_entities": 2853,
+    "neo4j": {
+      "nodes": 15,
+      "relationships": 10
+    }
+  },
+  "errors": []
+}

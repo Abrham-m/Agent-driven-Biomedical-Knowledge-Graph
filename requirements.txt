@@ -2,7 +2,8 @@
 nltk
 tqdm
 rapidfuzz
-fitz
+rdflib
+pymupdf
 transformers
 torch
 neo4j

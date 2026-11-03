@@ -1,0 +1,21 @@
+{
+  "run_id": "20261103-111604",
+  "status": "completed",
+  "run_time_s": 290.3,
+  "stats": {
+    "relations_extracted": 335,
+    "relations_valid_entities": 99,
+    "relations_with_evidence_sentence": 108,
+    "candidate_entities": 304,
+    "accepted_entities": 124,
+    "rejected_entities": 180,
+    "papers_processed": 2,
+    "ner_raw_entities": 1986,
+    "ner_final_entities": 506,
+    "neo4j": {
+      "nodes": 196,
+      "relationships": 209
+    }
+  },
+  "errors": []
+}

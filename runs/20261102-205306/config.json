@@ -1,0 +1,38 @@
+{
+  "run_id": "20261102-205306",
+  "date": "2026-11-02T19:53:09.802466+00:00",
+  "git": {
+    "commit": "0d97f281d1980bdbf6fc01a8dabb41c03710729b",
+    "dirty": true
+  },
+  "mode": "full",
+  "backend": "gemini",
+  "core_entity": "breast cancer",
+  "extraction_model": "gemini-2.5-flash",
+  "temperature": 0.0,
+  "max_output_tokens": 8192,
+  "ner_model": "d4data/biomedical-ner-all",
+  "num_papers": 9,
+  "papers": [
+    "An_overview_of_immune_checkpoint_inhibitors_in_bre.pdf",
+    "DNA_damage_targeted_therapy_for_advanced_breast_ca.pdf",
+    "Development_and_validation_of_an_infrared-artifici.pdf",
+    "Does_the_gut_microbiome_environment_influence_resp.pdf",
+    "Downregulation_of_15-hydroxyprostaglandin_dehydrog.pdf",
+    "Encouraging_probiotics_for_the_prevention_and_trea.pdf",
+    "Endocrine_resistant_breast_cancer:_brain_metastasi.pdf",
+    "Immune_Checkpoint_Inhibitors_in_Triple_Negative_Br.pdf",
+    "New_antibody-drug_conjugates_(ADCs)_in_breast_canc.pdf"
+  ],
+  "models_used": {
+    "DNA_damage_targeted_therapy_for_advanced_breast_ca": "gemini-2.5-flash",
+    "Immune_Checkpoint_Inhibitors_in_Triple_Negative_Br": "gemini-2.5-flash",
+    "An_overview_of_immune_checkpoint_inhibitors_in_bre": "gemini-2.5-flash",
+    "Downregulation_of_15-hydroxyprostaglandin_dehydrog": "gemini-2.5-flash",
+    "Does_the_gut_microbiome_environment_influence_resp": "gemini-2.5-flash",
+    "Encouraging_probiotics_for_the_prevention_and_trea": "gemini-2.5-flash",
+    "Development_and_validation_of_an_infrared-artifici": "gemini-2.5-flash",
+    "Endocrine_resistant_breast_cancer:_brain_metastasi": "gemini-2.5-flash",
+    "New_antibody-drug_conjugates_(ADCs)_in_breast_canc": "gemini-2.5-flash"
+  }
+}

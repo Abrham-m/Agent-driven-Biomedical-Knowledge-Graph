@@ -1,0 +1,32 @@
+{
+  "run_id": "20261103-020351",
+  "status": "completed",
+  "run_time_s": 2995.6,
+  "stats": {
+    "relations_extracted": 578,
+    "relations_valid_entities": 112,
+    "relations_with_evidence_sentence": 257,
+    "candidate_entities": 676,
+    "accepted_entities": 240,
+    "rejected_entities": 436,
+    "papers_processed": 9,
+    "ner_raw_entities": 11162,
+    "ner_final_entities": 2853,
+    "neo4j": {
+      "nodes": 126,
+      "relationships": 111
+    }
+  },
+  "errors": [
+    {
+      "stage": "relation-extraction",
+      "paper": "Endocrine_resistant_breast_cancer:_brain_metastasi",
+      "error": "RuntimeError: Gemini generate failed for all model candidates: [('gemini-2.5-flash', 'RetriesExhausted', '6 retryable failures'), ('gemini-2.0-flash', 'ValueError', 'HTTP 404: This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.8-flash for the latest features and improvements. We recommend you to use the Interactions API (https://ai.google.dev/gemini-api/docs/get-started).'), ('gemini-1.5-flash', 'ValueError', 'HTTP 404: models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.'), ('gemini-1.5-pro', 'ValueError', 'HTTP 404: models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.')]"
+    },
+    {
+      "stage": "relation-extraction",
+      "paper": "New_antibody-drug_conjugates_(ADCs)_in_breast_canc",
+      "error": "RuntimeError: Gemini generate failed for all model candidates: [('gemini-2.5-flash', 'RetriesExhausted', '6 retryable failures'), ('gemini-2.0-flash', 'ValueError', 'HTTP 404: This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.8-flash for the latest features and improvements. We recommend you to use the Interactions API (https://ai.google.dev/gemini-api/docs/get-started).'), ('gemini-1.5-flash', 'ValueError', 'HTTP 404: models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.'), ('gemini-1.5-pro', 'ValueError', 'HTTP 404: models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.')]"
+    }
+  ]
+}

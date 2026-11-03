@@ -28,6 +28,9 @@ pip-wheel-metadata/
 # Generated project outputs
 output/
 
+# Neo4j graph exports and output snapshots (may contain full graph data)
+backup/
+
 # Dataset downloads and intermediate files
 dataset/research_papers/
 dataset/cleaned_papers/
