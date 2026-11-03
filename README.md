@@ -102,6 +102,71 @@ PDF Papers
 
 ---
 
+## Results
+
+Evaluation graph built on 2026-11-03 with `gemini-2.5-flash` (temperature 0, `maxOutputTokens` 65536), core entity `breast cancer`, NER model `d4data/biomedical-ner-all`. It was produced by two runs: `20261103-020351` covers 7 papers, and `20261103-111604` re-ran the 2 papers that hit Gemini rate limits (`--papers`). Full logs are in `runs/<run_id>/`.
+
+| Metric | Value |
+|---|---|
+| Papers processed | 9 / 9 |
+| NER entities (raw → after rule-based cleaning) | 11,162 → 2,853 |
+| Candidate entities sent to NCIt (relation endpoints, unique per paper) | 980 |
+| Accepted / rejected by NCIt | 364 (218 exact, 146 fuzzy) / 616 |
+| Relations extracted by the LLM | 913 (163 distinct relation types) |
+| Relations with both entities grounded in NCIt (stored) | 211 |
+| Relations with a supporting sentence found in the source text | 365 of 913; 93 of the 209 stored edges |
+| **Final Neo4j graph** | **196 nodes, 209 relationships, 48 relation types** |
+
+Per paper:
+
+| Paper | NER final | Candidates | Accepted | Relations | Stored |
+|---|---:|---:|---:|---:|---:|
+| An overview of immune checkpoint inhibitors in breast cancer | 346 | 51 | 20 | 30 | 8 |
+| DNA damage targeted therapy for advanced breast cancer | 385 | 150 | 56 | 123 | 29 |
+| Development and validation of an infrared-AI software for breast cancer detection | 179 | 33 | 8 | 32 | 2 |
+| Does the gut microbiome environment influence response to systemic breast cancer treatment? | 245 | 59 | 21 | 40 | 5 |
+| Downregulation of 15-hydroxyprostaglandin dehydrogenase during acquired tamoxifen resistance | 334 | 52 | 8 | 38 | 0 |
+| Encouraging probiotics … immunotherapies against malignant glioma | 254 | 208 | 86 | 243 | 57 |
+| Endocrine resistant breast cancer: brain metastasis | 227 | 192 | 63 | 178 | 22 |
+| Immune checkpoint inhibitors in triple negative breast cancer treatment | 604 | 123 | 41 | 72 | 11 |
+| New antibody-drug conjugates (ADCs) in breast cancer | 279 | 112 | 61 | 157 | 77 |
+
+The most-connected nodes are trastuzumab deruxtecan (21 edges), sacituzumab govitecan (16), ladiratumab vedotin (13), immunotherapy (13) and immune-related adverse events (13).
+
+Each run directory contains `config.json` (settings, papers, model actually used, finish reason and token usage per paper), `relations.jsonl` (one line per extracted relation with its provenance and validation outcome), `entity_validation.jsonl` (one line per NCIt candidate) and `summary.json`. Every Neo4j relationship carries `source_paper`, `run_id`, `chunk_ids`, `evidence` and `extraction_model`.
+
+---
+
+## Findings
+
+- **Output-token truncation was the main bottleneck.** With `maxOutputTokens` 8192, every Gemini response was cut off: gemini-2.5-flash spends 11k–34k "thinking" tokens per paper, and these count against the same budget. That run (`runs/20261102-205306`) recovered only 75 relations and 10 graph edges. Raising the limit to 65536 gave 913 relations and 209 edges, and every response ended with `finishReason: STOP`.
+- **NCIt validation grounds entities, not relations.** 211 relations were stored because both endpoints resolved to NCIt concepts, but none of the 913 matched an NCIt relationship between those concepts (`requested_relation_found` is false for every relation). Stored edges are therefore LLM claims about grounded entities, not ontology-confirmed facts.
+- **Fuzzy matching accounts for 40% of accepted entities** (146 of 364, `rapidfuzz` ratio ≥ 85). Many look right (e.g. "PARP inhibitors" → C155926), but near-miss matches such as "homologous recombination repair reactivation" → C150641 need manual review.
+- **The LLM mostly names its own entities.** Only 265 of the 980 NCIt candidates (27%) appear verbatim in that paper's cleaned NER entity list. The NER output works as a hint in the prompt, not as a constraint.
+- **Relation types are not controlled.** The prompt lists about 25 preferred types, but the model produced 163 distinct ones (e.g. `is_a_type_of`, `improves`, `lacks`). The stored graph has 48.
+- **Evidence coverage is partial.** The extractor does not return evidence, so supporting sentences are found afterwards by looking for a sentence that mentions both entities. This works for 40% of all relations and 44% of stored edges. A missing sentence does not mean the relation is unsupported, because the model often paraphrases entity names.
+- **Graph integration across papers is weak.** Only 2 of 209 edges are supported by more than one paper. Six groups of nodes differ only by capitalisation (e.g. `Immunotherapy` / `immunotherapy`), because nodes are merged on the exact name.
+- **The paper set is not purely breast cancer.** The probiotics paper is about malignant glioma and never mentions breast cancer. The model correctly extracted no breast-cancer relations from it, even though the prompt asks for at least one relation involving the core entity. It is also the largest contributor (243 relations, 57 stored edges).
+- **Output is uneven across papers.** One paper (15-PGDH / tamoxifen resistance) contributed no edges, and two papers (ADCs and probiotics) account for 64% of stored relations (134 of 211).
+- **Rate limits dominate run time.** The 7-paper run took 50 minutes, mostly waiting on HTTP 429/503 retries. Two papers failed after exhausting retries, and the fallback models (`gemini-2.0-flash`, `gemini-1.5-*`) are no longer available.
+
+---
+
+## Evaluation Plan
+
+1. **Relation precision (manual annotation).** Sample about 100 stored edges, stratified by paper and relation type. Have two annotators label each against the source paper as *supported*, *partially supported* or *unsupported*, using the `evidence` sentences where present. Report precision with 95% confidence intervals and inter-annotator agreement (Cohen's κ).
+2. **Entity grounding accuracy.** Sample about 100 accepted entities from `entity_validation.jsonl`, split evenly between exact and fuzzy matches, and check whether the assigned NCIt concept is correct. Use this to choose a fuzzy threshold, or to drop fuzzy matching.
+3. **Rejection analysis.** Sample about 100 rejected entities and classify why they failed (not a biomedical concept, phrase too long or compositional, a synonym missing from the index, or a normalisation issue). Estimate how many valid relations validation discards.
+4. **Evidence coverage.** For relations without a matched sentence, check whether the relation is still stated in the text. This shows whether the post-hoc matcher under-reports support and whether evidence should be requested from the LLM directly.
+5. **Recall on a gold subset.** Annotate all relations in 2 papers by hand (one breast-cancer review, plus the glioma paper as an off-topic control). Report recall and precision of extracted relations before and after NCIt filtering.
+6. **Reproducibility.** Re-run the pipeline 3 times with identical settings and measure the overlap (Jaccard) of stored edges. Temperature 0 does not guarantee identical outputs from Gemini's thinking models.
+7. **Ablations.** Compare 8192 vs 65536 output tokens (already logged), with vs without fuzzy matching, and gemini-2.5-flash vs an alternative backend (`--backend openai`). Use the same papers and core entity, and report the metrics above for each.
+8. **Downstream QA.** Write about 30 questions answerable from the papers. Score QA answers for correctness and source attribution, and check that unanswerable questions return the "not in the knowledge graph" response.
+
+To reproduce the run: `python main_pipeline.py --mode full --backend gemini --core-entity "breast cancer" --clear-neo4j`. To re-run individual papers without clearing the graph, add `--papers <name> ...`.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
